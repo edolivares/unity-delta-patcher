@@ -2,13 +2,13 @@ import os
 import hashlib
 import json
 import subprocess
+import zipfile
+import shutil
 
 # Configuración de carpetas
 OLD_DIR = 'Old'
 NEW_DIR = 'New'
 PATCHES_DIR = 'Patches'
-MANIFEST_PATH = 'patch_manifest.json'
-VERSION_FILE = os.path.join(NEW_DIR, 'version.txt')
 XDELTA_EXECUTABLE = os.path.join('Utils', 'xdelta3.exe')
 
 # Tipos de archivos y carpetas a ignorar
@@ -47,17 +47,49 @@ def generate_patch(old_path, new_path, patch_path):
         XDELTA_EXECUTABLE, '-e', '-s', old_path, new_path, patch_path
     ], check=True)
 
+def read_version(version_file_path):
+    if not os.path.exists(version_file_path):
+        raise FileNotFoundError(f"No se encuentra el archivo de versión: {version_file_path}")
+    
+    with open(version_file_path, 'r') as vf:
+        return vf.read().strip()
+
+def create_zip_archive(patch_folder, zip_name):
+    with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(patch_folder):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, patch_folder)
+                zipf.write(file_path, arcname)
+
 def main():
-    if not os.path.exists(VERSION_FILE):
-        print(f"ERROR: No se encuentra {VERSION_FILE}")
+    # Leer versiones
+    old_version_file = os.path.join(OLD_DIR, 'version.txt')
+    new_version_file = os.path.join(NEW_DIR, 'version.txt')
+    
+    try:
+        old_version = read_version(old_version_file)
+        new_version = read_version(new_version_file)
+    except FileNotFoundError as e:
+        print(f"ERROR: {e}")
         return
 
-    with open(VERSION_FILE, 'r') as vf:
-        version = vf.read().strip()
-
-    os.makedirs(PATCHES_DIR, exist_ok=True)
+    # Crear nombre de la carpeta del parche
+    patch_folder_name = f"edupie-patch-v{old_version}-to-v{new_version}"
+    patch_folder_path = os.path.join(PATCHES_DIR, patch_folder_name)
+    patches_subfolder = os.path.join(patch_folder_path, 'patches')
+    
+    # Crear estructura de carpetas
+    os.makedirs(patch_folder_path, exist_ok=True)
+    os.makedirs(patches_subfolder, exist_ok=True)
+    
+    # Crear archivo version.txt en la carpeta del parche
+    version_file_path = os.path.join(patch_folder_path, 'version.txt')
+    with open(version_file_path, 'w') as vf:
+        vf.write(f"v{old_version}-to-v{new_version}")
+    
     manifest = {
-        'version': version,
+        'version': new_version,
         'patch_files': []
     }
 
@@ -66,11 +98,15 @@ def main():
     for rel_path in new_files:
         old_file = os.path.join(OLD_DIR, rel_path)
         new_file = os.path.join(NEW_DIR, rel_path)
-        patch_file = os.path.join(PATCHES_DIR, rel_path + '.xdelta')
+        patch_file = os.path.join(patches_subfolder, rel_path + '.xdelta')
+
+        # Crear directorio para el parche si es necesario
+        patch_dir = os.path.dirname(patch_file)
+        if patch_dir:
+            os.makedirs(patch_dir, exist_ok=True)
 
         if not os.path.exists(old_file):
             print(f"[NUEVO] {rel_path}")
-            ensure_patch_dir(rel_path)
             generate_patch('NUL', new_file, patch_file)
         else:
             with open(old_file, 'rb') as f1, open(new_file, 'rb') as f2:
@@ -78,19 +114,29 @@ def main():
                     continue
 
             print(f"[MODIFICADO] {rel_path}")
-            ensure_patch_dir(rel_path)
             generate_patch(old_file, new_file, patch_file)
 
         manifest['patch_files'].append({
             'path': rel_path.replace("\\", "/"),
-            'patch': os.path.join(PATCHES_DIR, rel_path + '.xdelta').replace("\\", "/"),
+            'patch': (rel_path + '.xdelta').replace("\\", "/"),
             'size': os.path.getsize(new_file),
             'sha256': compute_sha256(new_file)
         })
 
-    with open(MANIFEST_PATH, 'w', encoding='utf-8') as mf:
+    # Guardar manifest en la carpeta del parche
+    manifest_path = os.path.join(patch_folder_path, 'patch_manifest.json')
+    with open(manifest_path, 'w', encoding='utf-8') as mf:
         json.dump(manifest, mf, indent=2)
-    print(f"\n✅ Manifest generado: {MANIFEST_PATH}")
+    
+    print(f"\n✅ Manifest generado: {manifest_path}")
+    
+    # Crear archivo ZIP
+    zip_name = f"{patch_folder_name}.zip"
+    zip_path = os.path.join(PATCHES_DIR, zip_name)
+    create_zip_archive(patch_folder_path, zip_path)
+    
+    print(f"✅ Archivo ZIP creado: {zip_path}")
+    print(f"✅ Estructura de carpetas creada: {patch_folder_path}")
 
 if __name__ == '__main__':
     main()
