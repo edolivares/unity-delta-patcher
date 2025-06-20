@@ -1,0 +1,34 @@
+# Archivos generados
+*.zip
+*.xdelta
+*.patched
+*.bak
+*.log
+*.tmp
+patch_manifest.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Carpetas de builds
+Old/*
+New/*
+Patches/*
+patch_temp/
+output/
+
+# Incluir los .gitkeep de New y Old
+!Old/.gitkeep
+!New/.gitkeep
+!Patches/.gitkeep
+
+# Editor
+.vscode/
+.idea/
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+
+edupie-patch*
