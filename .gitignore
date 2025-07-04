@@ -17,11 +17,17 @@ New/*
 Patches/*
 patch_temp/
 output/
+manifest/*
+MakeBuild/*
+Builds/*
 
 # Incluir los .gitkeep de New y Old
 !Old/.gitkeep
 !New/.gitkeep
 !Patches/.gitkeep
+!manifest/.gitkeep
+!MakeBuild/.gitkeep
+!Builds/.gitkeep
 
 # Editor
 .vscode/
